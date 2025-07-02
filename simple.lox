@@ -1,0 +1,3 @@
+var teste = 10;
+var str = "MyStr";
+var orchid = nil or "str";
