@@ -133,7 +133,6 @@ impl Scanner {
             buff.push(self.source.next().unwrap());
         }
 
-        dbg!(&buff);
         buff
     }
     fn number(&mut self) -> f64 {
@@ -193,7 +192,6 @@ impl Parser {
 
     pub fn scan_tokens(&mut self) {
         while let Some(ch) = self.scanner.peek() {
-            dbg!(&ch);
             match ch {
                 '(' => self.add_token_advance(TokenType::LeftBrace, None),
                 ')' => self.add_token_advance(TokenType::RightBrace, None),
