@@ -1,20 +1,19 @@
-// ???
-// #[allow(dead_code)]
 use lox_lang::{parser::Parser, reader};
 use std::{
+    cmp::Ordering,
     io::{self, BufRead, Write},
     process::exit,
 };
 
 fn main() {
     let args = std::env::args();
-    if args.len() > 2 {
-        eprintln!("{}", "Usage: jlox [script]");
-        exit(64);
-    } else if args.len() == 2 {
-        reader::read_file(args.last().unwrap());
-    } else {
-        read_prompt();
+    match args.len().cmp(&2) {
+        Ordering::Less => read_prompt(),
+        Ordering::Equal => reader::read_file(args.last().unwrap()),
+        Ordering::Greater => {
+            eprintln!("Usage: jlox [script]");
+            exit(64);
+        }
     }
 }
 
@@ -35,7 +34,13 @@ fn read_prompt() {
 fn run(source: String) {
     let mut parser = Parser::new(source);
     parser.scan_tokens();
-    dbg!(parser.tokens);
+    dbg!(&parser.errors);
+
+    // if parser.errors.len() > 0 {
+    //     parser.report();
+    // } else {
+    //     dbg!(parser.tokens);
+    // }
     // let tokens = source.split_ascii_whitespace();
     // for token in tokens {
     //     println!("Token: {token}");

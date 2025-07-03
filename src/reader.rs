@@ -10,7 +10,11 @@ pub fn read_file(path: String) {
 
     let mut parser = Parser::new(content);
     parser.scan_tokens();
-    dbg!(parser.tokens);
+    if !parser.errors.is_empty() {
+        parser.report();
+    } else {
+        dbg!(parser.tokens);
+    }
     // println!("Content:");
     // println!("{}", content);
     // println!("Not yet implemented");

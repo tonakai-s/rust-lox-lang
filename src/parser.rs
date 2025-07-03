@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::Peekable, vec::IntoIter};
+use std::{collections::HashMap, fmt, iter::Peekable, vec::IntoIter};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -63,11 +63,7 @@ pub struct Token {
     line: usize,
 }
 impl Token {
-    fn new(
-        token_type: TokenType,
-        literal: Option<Literal>,
-        line: usize,
-    ) -> Self {
+    fn new(token_type: TokenType, literal: Option<Literal>, line: usize) -> Self {
         Self {
             token_type,
             literal,
@@ -115,7 +111,7 @@ impl Scanner {
         self.source.next()
     }
     fn skip_line(&mut self) {
-        while let Some(ch) = self.source.next() {
+        while let Some(ch) = self.next() {
             if ch == '\n' {
                 self.column = 0;
                 self.line += 1;
@@ -123,38 +119,72 @@ impl Scanner {
         }
     }
     fn string(&mut self) -> String {
-        self.source.next();
+        self.next();
 
         let mut buff = String::new();
-        while let Some(ch) = self.source.peek() {
-            if *ch == '\n' { self.line += 1; continue; };
-            if *ch == '\0' { todo!("Implement error: Unterminated string.") }
-            if *ch == '"' { break; };
-            buff.push(self.source.next().unwrap());
+        while let Some(ch) = self.peek() {
+            if *ch == '\n' {
+                self.line += 1;
+                continue;
+            };
+            if *ch == '\0' {
+                todo!("Implement error: Unterminated string.")
+            }
+            if *ch == '"' {
+                break;
+            };
+            buff.push(self.next().unwrap());
         }
 
         buff
     }
     fn number(&mut self) -> f64 {
         let mut buff = String::new();
-        while let Some(ch) = self.source.peek() {
-            if !ch.is_digit(10) { break; }
-            buff.push(self.source.next().unwrap());
+        while let Some(ch) = self.peek() {
+            if !ch.is_ascii_digit() {
+                break;
+            }
+            buff.push(self.next().unwrap());
         }
 
         match buff.parse::<f64>() {
-            Ok(num) => num,
-            Err(_) => todo!("Implement: Parse num error.")
+            std::result::Result::Ok(num) => num,
+            Err(_) => todo!("Implement: Parse num error."),
         }
     }
     fn identifier(&mut self) -> String {
         let mut buff = String::new();
-        while let Some(ch) = self.source.peek() {
-            if !ch.is_alphanumeric() { break; }
-            buff.push(self.source.next().unwrap());
+        while let Some(ch) = self.peek() {
+            if !ch.is_alphanumeric() {
+                break;
+            }
+            buff.push(self.next().unwrap());
         }
 
         buff
+    }
+}
+
+#[derive(Debug)]
+pub struct ParserError {
+    _file: String,
+    error: String,
+    line: usize,
+    column: usize,
+}
+impl ParserError {
+    fn new(file: String, error: String, line: usize, column: usize) -> Self {
+        Self {
+            _file: file,
+            error,
+            line,
+            column,
+        }
+    }
+}
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error: {} at {}:{}", self.error, self.line, self.column)
     }
 }
 
@@ -162,6 +192,7 @@ pub struct Parser {
     keywords: HashMap<&'static str, TokenType>,
     scanner: Scanner,
     pub tokens: Vec<Token>,
+    pub errors: Vec<ParserError>,
 }
 impl Parser {
     pub fn new(source: String) -> Self {
@@ -187,6 +218,13 @@ impl Parser {
             keywords,
             scanner: Scanner::new(source),
             tokens: vec![],
+            errors: vec![],
+        }
+    }
+
+    pub fn report(&self) {
+        for error in &self.errors {
+            println!("{}", error);
         }
     }
 
@@ -210,7 +248,7 @@ impl Parser {
                         TokenType::Bang
                     };
                     self.add_token(tkn_type, None);
-                },
+                }
                 '=' => {
                     let tkn_type = if self.scanner.advance_match('=') {
                         TokenType::EqualEqual
@@ -242,7 +280,9 @@ impl Parser {
                         self.add_token(TokenType::Slash, None);
                     }
                 }
-                ' ' | '\r' | '\t' => {self.scanner.next();}
+                ' ' | '\r' | '\t' => {
+                    self.scanner.next();
+                }
                 '\n' => {
                     self.scanner.next_line();
                 }
@@ -251,7 +291,7 @@ impl Parser {
                     self.add_token_advance(TokenType::String, Some(Literal::String(str)));
                 }
                 _ => {
-                    if ch.is_digit(10) {
+                    if ch.is_ascii_digit() {
                         let num = self.scanner.number();
                         self.add_token(TokenType::Number, Some(Literal::Number(num)));
                     } else if ch.is_alphabetic() || *ch == '_' {
@@ -259,13 +299,16 @@ impl Parser {
                         if let Some(tkn_type) = self.keywords.get(identifier.as_str()) {
                             self.add_token(tkn_type.clone(), None);
                         } else {
-                            self.add_token(TokenType::Identifier, Some(Literal::Identifier(identifier)));
+                            self.add_token(
+                                TokenType::Identifier,
+                                Some(Literal::Identifier(identifier)),
+                            );
                         }
                     } else {
-                        self.scanner.next();
+                        self.add_error("Unexpected character".to_string());
                         // todo!("Implement: Error report");
                     }
-                },
+                }
             }
         }
     }
@@ -279,5 +322,10 @@ impl Parser {
         self.tokens
             .push(Token::new(tkn_type, literal, self.scanner.line));
         self.scanner.next();
+    }
+    fn add_error(&mut self, error: String) {
+        self.scanner.next();
+        let error = ParserError::new("".into(), error, self.scanner.line, self.scanner.column);
+        self.errors.push(error);
     }
 }
